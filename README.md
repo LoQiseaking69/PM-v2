@@ -5,6 +5,8 @@
 ---
 ![img](https://github.com/LoQiseaking69/PM-v2/blob/main/IMG_0655.jpeg)
 
+*UI is slightly different 😅 but backend logic should be 
+still entact and connected properly...*
 ___
 
 ## Features
