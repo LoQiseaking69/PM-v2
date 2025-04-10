@@ -1,0 +1,6 @@
+web3
+numpy
+scipy
+PyQt5
+pycryptodome
+python-dotenv
