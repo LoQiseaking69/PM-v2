@@ -1,5 +1,6 @@
 web3
 numpy
+matplotlib
 scipy
 PyQt5
 pycryptodome
