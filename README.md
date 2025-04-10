@@ -1,7 +1,6 @@
 # Profit-Mask v2
 
-**Profit-Mask v2** is a GUI-powered, real-execution trading terminal for Uniswap that uses a MetaMask wallet address. Built for high-efficiency swap execution, it performs real ERC-20 approvals and swaps using ABI-encoded RPC calls—without `web3.py`.
-
+**Profit-Mask v2** is a GUI-powered, real-execution trading terminal for Uniswap that uses a MetaMask wallet address. Built for high-efficiency swap execution, it performs real ERC-20 approvals and swaps using ABI-encoded RPC calls
 ---
 ![img](https://github.com/LoQiseaking69/PM-v2/blob/main/IMG_0655.jpeg)
 
