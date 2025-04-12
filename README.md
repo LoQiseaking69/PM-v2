@@ -1,23 +1,34 @@
+# Profit-Mask: Decentralized Trading Terminal
 
-# Profit-Mask Enhanced
-
-**Profit-Mask** is an advanced, GUI-powered decentralized trading terminal designed for MetaMask-integrated environments using Uniswap. It supports signal-based and oracle-based trading strategies, real-time profit tracking, and backtest-ready logging.
+**Profit-Mask** is a high-performance, GUI-based trading terminal tailored for MetaMask-enabled decentralized finance (DeFi) operations. It interfaces with Uniswap and integrates live profit tracking, strategy switching, and full backtesting capabilities. Designed with efficiency, security, and usability in mind.
 
 ---
 
 ## Features
 
-- PyQt5 Sci-Fi GUI Terminal
-- Dynamic strategy switching (signal vs profit)
-- Wallet integrity and balance checks
-- Chainlink/Uniswap-compatible Oracle abstraction
-- Live chart of trading performance
-- Full SQLite logging for backtesting and audit
-- Configurable Infura / token / slippage / fee settings
-- TTL price caching for high efficiency
+- **Sci-Fi PyQt5 GUI** with modular tabs and real-time state feedback  
+- **Dynamic Strategy Mode**: Switch between `signal` and `profit` logic  
+- **Wallet Validation**: Live MetaMask address parsing and ETH balance checks  
+- **Oracle Integration**: Chainlink-compatible querying for token price accuracy  
+- **Live Profit Charting**: Real-time estimated returns visualized over time  
+- **Robust Logging**: All trade and price activity stored in SQLite and log files  
+- **Configurable Runtime**: Adjustable router, slippage, token pairs, and RPC endpoints  
+- **Export Options**: Manual and automated data export for analysis and audit  
 
 ---
 
+## Interface Preview
+
+**Credential Configuration**  
+![Wallet Input](IMG_0921.jpeg)
+
+**Live Tactical Logs**  
+![Console Log Output](IMG_0922.jpeg)
+
+**Real-Time Profit Chart**  
+![Profit Chart](IMG_0923.jpeg)
+
+---
 ## Project Structure
 
 ```
@@ -50,7 +61,7 @@ Profit-Mask/
 
 ---
 
-## Getting Started
+## Setup Guide
 
 ### 1. Install Dependencies
 
@@ -58,7 +69,7 @@ Profit-Mask/
 pip install -r requirements.txt
 ```
 
-### 2. Launch GUI
+### 2. Launch the Application
 
 ```bash
 python main_gui.py
@@ -68,38 +79,37 @@ python main_gui.py
 
 ## Configuration
 
-- **`config/config.ini`** stores default settings (read at GUI start)
-- **`runtime_config.ini`** is rewritten when bot launches
-
-Edit token, wallet, or RPC defaults directly or via GUI fields.
-
----
-
-## Backtesting
-
-Historical profit data is stored in:
-
-```
-data/trading_log.db (table: profits)
-```
-
-Export via:
-- Automatic CSV (every 10 cycles)
-- Manual script for backtest CLI integration (`strategy.py` stub ready)
+- `config/config.ini`: Default token, RPC, slippage, and address settings  
+- `runtime_config.ini`: Auto-generated and rewritten during runtime  
+- GUI fields directly override config values and persist on "Save"
 
 ---
 
-## Enhancements Over Beta
+## Logging & Backtesting
 
-- Modular folder layout
-- Dynamic ERC20 decimal detection
-- Token/address checksum auto-correction
-- TTL-cached price queries
-- Secure logging with no private key exposure
-- Auto-seed profit history on first boot
+- SQLite database file: `data/trading_log.db`  
+- Table: `profits` with estimated ETH gain/loss over time
+
+Export Options:
+- **Automatic**: CSV/JSON export every 10 cycles  
+- **Manual**: Via GUI export tab  
+- **CLI-Compatible**: Stub functions extendable in `strategy.py` for backtesting logic
 
 ---
+
+## Enhancements Over Prior Version
+
+- Modularized directory structure  
+- Checksum-corrected token validation  
+- Automatic ABI-based decimal detection  
+- TTL-based price caching to reduce RPC load  
+- GUI-controlled config and export  
+- Initial profit history seed logic for boot chart  
+
 
 ## License
 
-MIT — use freely with attribution.
+BSD 3-Clause License
+
+Copyright (c) 2025, Profit-Mask Contributors  
+All rights reserved.
