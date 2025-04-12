@@ -1,7 +1,7 @@
-from decimal import Decimal
-import random
 import logging
 import time
+import random
+from decimal import Decimal
 
 # Minimal Chainlink aggregator ABI
 CHAINLINK_AGGREGATOR_ABI = [
@@ -24,7 +24,7 @@ CHAINLINK_AGGREGATOR_ABI = [
 CHAINLINK_FEEDS = {
     ("eth", "usd"): "0x5f4ec3df9cbd43714fe2740f5e3616155c5b8419",  # Mainnet ETH/USD
     ("link", "usd"): "0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c",
-    # Add more as needed
+    # Extendable...
 }
 
 
@@ -32,21 +32,22 @@ class Oracle:
     def __init__(self, w3, address=None, ttl=60):
         self.w3 = w3
         self.address = address
+        self.ttl = ttl
         self.cache = {}
         self.last_updated = {}
-        self.ttl = ttl  # seconds
 
     def get_price(self, token, base_token, refresh=False):
         try:
             key = (token.lower(), base_token.lower())
             now = time.time()
 
-            if not refresh and key in self.cache:
-                if now - self.last_updated.get(key, 0) < self.ttl:
-                    return self.cache[key]
+            # Use cache if fresh
+            if not refresh and key in self.cache and now - self.last_updated.get(key, 0) < self.ttl:
+                return self.cache[key]
 
             price = self._fetch_chainlink_price(token, base_token)
 
+            # Fallback if no price available
             if price is None:
                 price = Decimal(str(round(random.uniform(0.95, 1.05), 5)))
                 logging.warning(f"[Oracle] Fallback to simulated price: {token[:6]}->{base_token[:6]} = {price}")
@@ -63,18 +64,25 @@ class Oracle:
 
     def _fetch_chainlink_price(self, token, base_token):
         try:
-            feed_key = (token.lower(), base_token.lower())
-            feed_address = CHAINLINK_FEEDS.get(feed_key)
+            key = (token.lower(), base_token.lower())
+            feed_address = CHAINLINK_FEEDS.get(key)
             if not feed_address:
+                logging.warning(f"[Oracle] No Chainlink feed for {token}->{base_token}")
                 return None
 
-            aggregator = self.w3.eth.contract(address=self.w3.to_checksum_address(feed_address), abi=CHAINLINK_AGGREGATOR_ABI)
+            aggregator = self.w3.eth.contract(
+                address=self.w3.to_checksum_address(feed_address),
+                abi=CHAINLINK_AGGREGATOR_ABI
+            )
             data = aggregator.functions.latestRoundData().call()
             answer = data[1]
-            if answer <= 0:
+
+            if not isinstance(answer, int) or answer <= 0:
+                logging.warning(f"[Oracle] Invalid Chainlink answer for {token}->{base_token}: {answer}")
                 return None
 
-            return Decimal(str(answer)) / Decimal("1e8")  # Chainlink feeds return 8 decimals
+            return Decimal(str(answer)) / Decimal("1e8")
+
         except Exception as e:
             logging.error(f"[Oracle] Chainlink fetch failed for {token}->{base_token}: {e}")
             return None
