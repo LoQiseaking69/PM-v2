@@ -1,11 +1,13 @@
 # Profit-Mask v2
 
-A GUI-Driven, real-execution trading terminal for Uniswap that uses a MetaMask wallet address. Built for high-efficiency swap execution, it performs real ERC-20 approvals and swaps using ABI-encoded RPC calls
+
+*A GUI-Driven, real-execution trading terminal for Uniswap that uses a MetaMask wallet address. Built for high-efficiency swap execution, it performs real ERC-20 approvals and swaps using ABI-encoded RPC calls*
+
 ---
 ![img](https://github.com/LoQiseaking69/PM-v2/blob/main/IMG_0655.jpeg)
 
-*UI is slightly different 😅 but backend logic should be 
-still entact and connected properly...*
+> **ℹ️ Info:**  
+> The latest UI improvements and layout enhancements are actively maintained on the `master` branch.
 ___
 
 ## Features
