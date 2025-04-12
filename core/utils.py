@@ -6,7 +6,6 @@ from web3.exceptions import TransactionNotFound
 
 from core.oracle import Oracle
 
-# Constants
 QUOTER_ADDRESS = Web3.to_checksum_address("0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6")
 
 QUOTER_ABI = [
@@ -49,13 +48,11 @@ ERC20_ABI = [
     }
 ]
 
+
 def init_web3(config=None):
     try:
-        if config:
-            infura_url = config.get("WEB3", "infura_url", fallback="").strip()
-        else:
-            infura_url = "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
-
+        infura_url = config.get("WEB3", "infura_url", fallback="").strip() if config else \
+                     "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
         w3 = Web3(Web3.HTTPProvider(infura_url))
         if not w3.is_connected():
             raise ConnectionError("Web3 connection failed.")
@@ -65,6 +62,7 @@ def init_web3(config=None):
         logging.error(f"[Web3] init_web3 error: {e}")
         raise
 
+
 def load_oracle(w3, config):
     try:
         oracle_address = config.get("ORACLE", "address")
@@ -72,6 +70,7 @@ def load_oracle(w3, config):
     except Exception as e:
         logging.error(f"[Oracle] load_oracle error: {e}")
         raise
+
 
 def estimate_gas_price(w3):
     try:
@@ -83,6 +82,7 @@ def estimate_gas_price(w3):
         logging.error(f"[Gas] estimate_gas_price error: {e}")
         return decimal.Decimal("0")
 
+
 def get_min_out(w3, token_in, token_out, amount_in, fee=3000, slippage=0.01):
     try:
         quoter = w3.eth.contract(address=QUOTER_ADDRESS, abi=QUOTER_ABI)
@@ -90,18 +90,19 @@ def get_min_out(w3, token_in, token_out, amount_in, fee=3000, slippage=0.01):
             token_in, token_out, fee, amount_in, 0
         ).call()
         min_out = int(quoted * (1 - slippage))
-        logging.info(f"[Quote] Expected: {quoted}, MinOut (slippage): {min_out}")
+        logging.info(f"[Quote] Expected={quoted}, MinOut (slippage)={min_out}")
         return min_out
     except Exception as e:
         logging.error(f"[Quote] Failed to fetch quote: {e}")
         return 0
+
 
 def check_allowance_and_approve(w3, token, router_address, wallet, amount_in, gas_price, nonce):
     try:
         token_contract = w3.eth.contract(address=token, abi=ERC20_ABI)
         current_allowance = token_contract.functions.allowance(wallet["address"], router_address).call()
         if current_allowance >= amount_in:
-            logging.info(f"[Allow] Sufficient allowance: {current_allowance}")
+            logging.info(f"[Allow] Current allowance sufficient: {current_allowance}")
             return nonce
 
         logging.info(f"[Allow] Approving {amount_in} for {token}...")
@@ -120,6 +121,7 @@ def check_allowance_and_approve(w3, token, router_address, wallet, amount_in, ga
         logging.error(f"[Allow] Approval error: {e}")
         return nonce
 
+
 def execute_swap(w3, wallet, router, token, action, gas_price, fee=3000, slippage=0.01):
     try:
         nonce = w3.eth.get_transaction_count(wallet["address"])
@@ -130,7 +132,6 @@ def execute_swap(w3, wallet, router, token, action, gas_price, fee=3000, slippag
         if action == "buy":
             token_in = Web3.to_checksum_address(wallet["base_token"])
             token_out = Web3.to_checksum_address(token)
-
             min_out = get_min_out(w3, token_in, token_out, amount_in, fee, slippage)
             if min_out <= 0:
                 logging.error("[Swap] Invalid minOut for BUY")
@@ -158,7 +159,6 @@ def execute_swap(w3, wallet, router, token, action, gas_price, fee=3000, slippag
         elif action == "sell":
             token_in = Web3.to_checksum_address(token)
             token_out = Web3.to_checksum_address(wallet["base_token"])
-
             token_contract = w3.eth.contract(address=token_in, abi=ERC20_ABI)
             balance = token_contract.functions.balanceOf(wallet["address"]).call()
             if balance < amount_in:
