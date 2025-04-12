@@ -100,7 +100,7 @@ class SciFiGUI(QWidget):
 
         tab.setLayout(layout)
         return tab
-
+        
     def _build_credentials_tab(self):
         tab = QWidget()
         layout = QVBoxLayout()
@@ -199,7 +199,7 @@ class SciFiGUI(QWidget):
         chart_layout.addWidget(self.chart_canvas)
         self.chart_tab.setLayout(chart_layout)
         return self.chart_tab
-
+        
     def _init_status_polling(self):
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._refresh_status_bar)
