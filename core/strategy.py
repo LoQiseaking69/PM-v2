@@ -1,10 +1,10 @@
-# strategy.py
 import random
 import numpy as np
 from decimal import Decimal
 from scipy.stats import zscore
 from web3 import Web3
 import logging
+
 
 class SignalStrategy:
     def __init__(self, config):
@@ -21,25 +21,33 @@ class SignalStrategy:
         return round(random.uniform(0.4, 1.8), 5)
 
     def evaluate_market(self):
-        price = self.fetch_latest_price()
-        self.price_history.append(price)
-        if len(self.price_history) > self.max_history:
-            self.price_history.pop(0)
+        try:
+            price = self.fetch_latest_price()
+            self.price_history.append(price)
+            if len(self.price_history) > self.max_history:
+                self.price_history.pop(0)
 
-        if len(self.price_history) < 6:
+            if len(self.price_history) < 6:
+                return {"action": "hold"}
+
+            prices = np.array(self.price_history)
+            slope = np.mean(prices[-3:]) - np.mean(prices[:3])
+            price_z = zscore(prices)[-1]
+            std_dev = np.std(prices)
+
+            logging.debug(f"[SignalStrategy] price={price}, slope={slope}, zscore={price_z}, std={std_dev}")
+
+            if slope > self.buy_slope and price_z > self.buy_zscore and std_dev < 0.5:
+                return {"action": "buy", "token_address": self.token_address, "amount_eth": self.amount_eth}
+            elif slope < self.sell_slope and price_z < self.sell_zscore and std_dev > 0.4:
+                return {"action": "sell", "token_address": self.token_address, "amount_eth": self.amount_eth}
+            else:
+                return {"action": "hold"}
+
+        except Exception as e:
+            logging.error(f"[SignalStrategy] Evaluation error: {e}")
             return {"action": "hold"}
 
-        prices = np.array(self.price_history)
-        slope = np.mean(prices[-3:]) - np.mean(prices[:3])
-        price_z = zscore(prices)[-1]
-        std_dev = np.std(prices)
-
-        if slope > self.buy_slope and price_z > self.buy_zscore and std_dev < 0.5:
-            return {"action": "buy", "token_address": self.token_address, "amount_eth": self.amount_eth}
-        elif slope < self.sell_slope and price_z < self.sell_zscore and std_dev > 0.4:
-            return {"action": "sell", "token_address": self.token_address, "amount_eth": self.amount_eth}
-        else:
-            return {"action": "hold"}
 
 class ProfitStrategy:
     def __init__(self, w3, router, wallet_address, private_key, oracle):
@@ -57,25 +65,42 @@ class ProfitStrategy:
 
     def scan_opportunities(self):
         opportunities = []
-        for token in self.tokens:
-            price = self.oracle.get_price(token, self.base_token)
-            fair_value = self.oracle.estimate_fair_value(token, self.base_token)
-            delta = (price - fair_value) / fair_value if fair_value != 0 else Decimal("0.0")
-            logging.info(f"Scanned {token}: price={price}, fair={fair_value}, delta={delta}")
-            if delta <= -0.03:
-                opportunities.append((token, 'buy', delta))
-            elif delta >= 0.03:
-                opportunities.append((token, 'sell', delta))
+        try:
+            for token in self.tokens:
+                price = self.oracle.get_price(token, self.base_token)
+                fair_value = self.oracle.estimate_fair_value(token, self.base_token)
+
+                if fair_value == 0:
+                    logging.warning(f"[ProfitStrategy] Skipping {token[:6]} due to invalid fair value")
+                    continue
+
+                delta = (price - fair_value) / fair_value
+                logging.info(f"[ProfitStrategy] {token[:6]}: price={price}, fair={fair_value}, delta={delta}")
+
+                if delta <= -0.03:
+                    opportunities.append((token, 'buy', delta))
+                elif delta >= 0.03:
+                    opportunities.append((token, 'sell', delta))
+
+        except Exception as e:
+            logging.error(f"[ProfitStrategy] Error during scan: {e}")
+
         return sorted(opportunities, key=lambda x: abs(x[2]), reverse=True)
 
     def should_trade(self, gas_cost_eth, profit_eth):
-        logging.debug(f"Gas cost: {gas_cost_eth}, Estimated profit: {profit_eth}")
-        return profit_eth > gas_cost_eth * Decimal("1.2")
+        try:
+            logging.debug(f"[ProfitStrategy] Gas={gas_cost_eth}, Profit={profit_eth}")
+            return profit_eth > gas_cost_eth * Decimal("1.2")
+        except Exception as e:
+            logging.error(f"[ProfitStrategy] should_trade error: {e}")
+            return False
+
 
 class StrategyManager:
     def __init__(self, config, runtime_options):
         self.mode = runtime_options.get("mode", "signal")
         self.strategy = None
+
         if self.mode == "signal":
             self.strategy = SignalStrategy(config)
         elif self.mode == "profit":
@@ -90,7 +115,11 @@ class StrategyManager:
             raise ValueError(f"Unsupported strategy mode: {self.mode}")
 
     def run_cycle(self, *args, **kwargs):
-        if self.mode == "signal":
-            return self.strategy.evaluate_market()
-        elif self.mode == "profit":
-            return self.strategy.scan_opportunities()
+        try:
+            if self.mode == "signal":
+                return self.strategy.evaluate_market()
+            elif self.mode == "profit":
+                return self.strategy.scan_opportunities()
+        except Exception as e:
+            logging.error(f"[StrategyManager] run_cycle error: {e}")
+            return {"action": "hold"} if self.mode == "signal" else []
