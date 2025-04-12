@@ -71,6 +71,7 @@ class TradingThread(QThread):
             self.conn.commit()
         except Exception as e:
             self.log_signal.emit(f"[DB ERROR] Failed to log trade: {e}")
+            logging.exception("[DB ERROR]")
 
     def _log_signal(self, mode, result):
         try:
@@ -81,6 +82,7 @@ class TradingThread(QThread):
             self.conn.commit()
         except Exception as e:
             self.log_signal.emit(f"[DB ERROR] Failed to log signal: {e}")
+            logging.exception("[DB ERROR]")
 
     def _log_profit(self, token, estimated_profit):
         try:
@@ -91,6 +93,7 @@ class TradingThread(QThread):
             self.conn.commit()
         except Exception as e:
             self.log_signal.emit(f"[DB ERROR] Failed to log profit: {e}")
+            logging.exception("[DB ERROR]")
 
     def export_table_to_csv(self, table_name, file_path):
         try:
@@ -103,6 +106,7 @@ class TradingThread(QThread):
             self.log_signal.emit(f"[EXPORT SUCCESS] {table_name} → {file_path}")
         except Exception as e:
             self.log_signal.emit(f"[EXPORT ERROR] {e}")
+            logging.exception("[EXPORT ERROR]")
 
     def export_table_to_json(self, table_name, file_path):
         try:
@@ -115,6 +119,7 @@ class TradingThread(QThread):
             self.log_signal.emit(f"[EXPORT SUCCESS] {table_name} → {file_path}")
         except Exception as e:
             self.log_signal.emit(f"[EXPORT ERROR] {e}")
+            logging.exception("[EXPORT ERROR]")
 
     def export_all_with_timestamp(self):
         os.makedirs("exports", exist_ok=True)
@@ -182,26 +187,31 @@ class TradingThread(QThread):
                         for token, action, delta in result:
                             gas = estimate_gas_price(runtime_options["w3"])
                             if manager.strategy.should_trade(gas, delta):
-                                tx = execute_swap(
-                                    runtime_options["w3"],
-                                    runtime_options["wallet"],
-                                    runtime_options["router"],
-                                    token,
-                                    action,
-                                    gas,
-                                    runtime_options["fee"],
-                                    runtime_options["slippage"]
-                                )
-                                self._log_trade(token, action, delta, gas, tx, success=bool(tx))
+                                try:
+                                    tx = execute_swap(
+                                        runtime_options["w3"],
+                                        runtime_options["wallet"],
+                                        runtime_options["router"],
+                                        token,
+                                        action,
+                                        gas,
+                                        runtime_options["fee"],
+                                        runtime_options["slippage"]
+                                    )
+                                    self._log_trade(token, action, delta, gas, tx, success=bool(tx))
 
-                                if hasattr(manager.strategy, "estimate_profit"):
-                                    try:
-                                        estimated = manager.strategy.estimate_profit(token, delta)
-                                        self._log_profit(token, estimated)
-                                    except Exception as ep:
-                                        self.log_signal.emit(f"[PROFIT ERROR] {ep}")
+                                    if hasattr(manager.strategy, "estimate_profit"):
+                                        try:
+                                            estimated = manager.strategy.estimate_profit(token, delta)
+                                            self._log_profit(token, estimated)
+                                        except Exception as ep:
+                                            self.log_signal.emit(f"[PROFIT ERROR] {ep}")
+                                            logging.exception("[PROFIT ERROR]")
 
-                                self.log_signal.emit(f"EXECUTED {action.upper()} {token[:6]} → TX {tx}")
+                                    self.log_signal.emit(f"EXECUTED {action.upper()} {token[:6]} → TX {tx}")
+                                except Exception as swap_err:
+                                    self.log_signal.emit(f"[SWAP ERROR] {swap_err}")
+                                    logging.exception("[SWAP ERROR]")
 
                     elif mode == "signal" and isinstance(result, dict) and result.get("action") != "hold":
                         self.log_signal.emit(f"Signal Decision: {result}")
