@@ -2,6 +2,7 @@ import configparser
 import random
 import sqlite3
 import sys
+import os
 
 from PyQt5.QtWidgets import QApplication
 from interface.gui import SciFiGUI
@@ -11,6 +12,9 @@ DB_PATH = "data/trading_log.db"
 
 def load_profit_history(gui):
     try:
+        if not os.path.exists(DB_PATH):
+            gui.log("[INIT] No DB found; skipping profit history.")
+            return
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT estimated_profit FROM profits ORDER BY id ASC")
@@ -28,7 +32,13 @@ def resolve_infura_url(network, current_url, project_id):
         return current_url.strip()
     if not project_id:
         raise ValueError("Missing Infura project_id in config.ini under [WEB3]")
-    chain = {"mainnet": "mainnet", "goerli": "goerli", "sepolia": "sepolia", "testnet": "goerli"}.get(network, "mainnet")
+    chain_map = {
+        "mainnet": "mainnet",
+        "goerli": "goerli",
+        "sepolia": "sepolia",
+        "testnet": "goerli"
+    }
+    chain = chain_map.get(network, "mainnet")
     return f"https://{chain}.infura.io/v3/{project_id}"
 
 def main():
@@ -42,18 +52,26 @@ def main():
         if "PROFIT" in msg.upper():
             try:
                 val = float(msg.split()[-1])
+                if -1000 < val < 1000:
+                    window.update_chart(val)
             except Exception:
-                val = random.uniform(-0.05, 0.05)
-            window.update_chart(val)
+                window.update_chart(random.uniform(-0.05, 0.05))
 
     def launch_trading(payload):
         nonlocal thread
         config = configparser.ConfigParser()
-        config.read("config/config.ini")
+        config_path = "config/config.ini"
+        runtime_path = "config/runtime_config.ini"
+
+        if not os.path.exists(config_path):
+            window.log("[ERROR] config/config.ini not found.")
+            return
+        config.read(config_path)
 
         config.set("GENERAL", "mode", payload.get("mode", "profit"))
         config.set("TRADING", "slippage", str(payload.get("slippage", 0.01)))
         config.set("TRADING", "fee_tier", str(payload.get("fee", 3000)))
+
         if payload.get("token_override"):
             config.set("TRADING", "token_address", payload["token_override"])
 
@@ -74,21 +92,21 @@ def main():
         config.set("ORACLE", "address", payload.get("oracle_address", ""))
         config["NETWORK"] = {"chain": network}
 
-        with open("config/runtime_config.ini", "w") as f:
+        os.makedirs(os.path.dirname(runtime_path), exist_ok=True)
+        with open(runtime_path, "w") as f:
             config.write(f)
 
         if thread:
             thread.stop()
             window.thread_alive = False
 
-        thread = TradingThread("config/runtime_config.ini")
+        thread = TradingThread(runtime_path)
         thread.log_signal.connect(log_intercept)
         thread.start()
         window.thread_alive = True
 
         window.log(f"Started {payload['mode']} strategy on {network}...")
 
-        # Wire GUI export buttons to backend
         window.export_requested.connect(
             lambda table, ftype: thread.export_table_to_csv(table, f"{table}_export.csv")
             if ftype == "csv" else thread.export_table_to_json(table, f"{table}_export.json")
