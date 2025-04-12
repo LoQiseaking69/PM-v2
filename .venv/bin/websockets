@@ -1,4 +1,4 @@
-#!/home/loq1101/Desktop/PMv2/.venv/bin/python3
+#!/home/loq1101/Desktop/PM-v2/.venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

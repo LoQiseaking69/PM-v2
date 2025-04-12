@@ -33,7 +33,7 @@ def resolve_infura_url(network, current_url, project_id):
 
 def main():
     app = QApplication(sys.argv)
-    window = SciFiGUI()  # Handles size, centering, scroll itself
+    window = SciFiGUI()
     thread = None
     load_profit_history(window)
 
@@ -88,8 +88,11 @@ def main():
 
         window.log(f"Started {payload['mode']} strategy on {network}...")
 
-        window.export_requested.connect(lambda t, f: thread.export_table_to_csv(t, f"{t}_export.csv") if f == "csv"
-                                        else thread.export_table_to_json(t, f"{t}_export.json"))
+        # Wire GUI export buttons to backend
+        window.export_requested.connect(
+            lambda table, ftype: thread.export_table_to_csv(table, f"{table}_export.csv")
+            if ftype == "csv" else thread.export_table_to_json(table, f"{table}_export.json")
+        )
         window.export_all.connect(thread.export_all_with_timestamp)
         window.set_export_interval.connect(lambda n: setattr(thread, "export_every_n_cycles", n))
 

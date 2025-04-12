@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QFormLayout, QComboBox,
-    QTextEdit, QLineEdit, QGroupBox, QHBoxLayout, QSpinBox, QTabWidget,
-    QGridLayout, QSizePolicy, QFrame, QApplication, QScrollArea
+    QTextEdit, QLineEdit, QGroupBox, QHBoxLayout, QTabWidget,
+    QGridLayout, QSizePolicy, QFrame, QApplication
 )
 from PyQt5.QtCore import pyqtSignal, Qt, QTimer
 from interface.styles import SCIFI_STYLE
@@ -21,7 +21,7 @@ class SciFiGUI(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Hybrid Trader - SciFi Ops Console")
+        self.setWindowTitle("ProfitMask - SciFi Ops Console")
         self.setStyleSheet(SCIFI_STYLE)
         self.resize(720, 540)
         self._center_window()
@@ -42,9 +42,13 @@ class SciFiGUI(QWidget):
     def _init_ui(self):
         tabs = QTabWidget()
         tabs.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        tabs.setMinimumSize(680, 400)
-        tabs.addTab(self._build_main_tab(), "🧠 Control Panel")
+        tabs.addTab(self._build_strategy_tab(), "🧠 Strategy")
+        tabs.addTab(self._build_credentials_tab(), "🛡️ Credentials")
+        tabs.addTab(self._build_export_tab(), "🧾 Export")
+        tabs.addTab(self._build_debug_tab(), "🛠 Console")
+        tabs.addTab(self._build_log_tab(), "📋 Log")
         tabs.addTab(self._build_chart_tab(), "📈 Live Profit Chart")
+
         layout = QVBoxLayout()
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
@@ -61,41 +65,12 @@ class SciFiGUI(QWidget):
             field.setEchoMode(QLineEdit.Password)
         return field
 
-    def _build_status_bar(self):
-        self.status_wallet = QLabel("Wallet: [Not Set]")
-        self.status_network = QLabel("Network: [Unknown]")
-        self.status_balance = QLabel("ETH: ?")
-        self.status_thread = QLabel("Thread: 🔴 Stopped")
-
-        for widget in [self.status_wallet, self.status_network, self.status_balance, self.status_thread]:
-            widget.setFrameStyle(QFrame.Panel | QFrame.Sunken)
-            widget.setStyleSheet("padding: 5px; font-weight: bold;")
-            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-        layout = QHBoxLayout()
-        layout.setSpacing(10)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.addWidget(self.status_wallet)
-        layout.addWidget(self.status_network)
-        layout.addWidget(self.status_balance)
-        layout.addWidget(self.status_thread)
-
-        container = QWidget()
-        container.setLayout(layout)
-        return container
-
-    def _build_main_tab(self):
-        main = QWidget()
-        main_layout = QVBoxLayout()
-        main_layout.setSpacing(8)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+    def _build_strategy_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
 
         strategy_group = QGroupBox("🚀 Strategy Configuration")
         strategy_layout = QFormLayout()
-        strategy_layout.setLabelAlignment(Qt.AlignRight)
-        strategy_layout.setFormAlignment(Qt.AlignTop)
-        strategy_layout.setHorizontalSpacing(16)
-        strategy_layout.setContentsMargins(8, 8, 8, 8)
 
         self.mode_selector = QComboBox()
         self.mode_selector.addItems(["signal", "profit"])
@@ -117,12 +92,21 @@ class SciFiGUI(QWidget):
         strategy_layout.addRow(QLabel("Token Override:"), self.token_entry)
 
         strategy_group.setLayout(strategy_layout)
-        main_layout.addWidget(strategy_group)
+        layout.addWidget(strategy_group)
+
+        self.start_btn = QPushButton("🔥 ENGAGE STRATEGY")
+        self.start_btn.clicked.connect(self.start_clicked)
+        layout.addWidget(self.start_btn)
+
+        tab.setLayout(layout)
+        return tab
+
+    def _build_credentials_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
 
         self.creds_group = QGroupBox("🔐 Wallet & Node Credentials")
         creds_layout = QGridLayout()
-        creds_layout.setContentsMargins(8, 8, 8, 8)
-        creds_layout.setHorizontalSpacing(10)
 
         self.pk_input = self._standard_input("Enter Private Key", is_password=True)
         self.wallet_input = self._standard_input("Enter Wallet Address")
@@ -151,43 +135,60 @@ class SciFiGUI(QWidget):
         creds_layout.addWidget(self.oracle_input, 4, 1, 1, 2)
 
         self.creds_group.setLayout(creds_layout)
-        main_layout.addWidget(self.creds_group)
+        layout.addWidget(self.creds_group)
 
         cred_btns = QHBoxLayout()
         creds_toggle = QPushButton("Hide Credentials")
         autofill_btn = QPushButton("Load from config.ini")
         save_btn = QPushButton("Save to config.ini")
-        cred_btns.addWidget(creds_toggle)
-        cred_btns.addWidget(autofill_btn)
-        cred_btns.addWidget(save_btn)
-
         creds_toggle.clicked.connect(self._toggle_creds_visibility)
         autofill_btn.clicked.connect(self._load_config_to_fields)
         save_btn.clicked.connect(self._save_config_from_fields)
+        cred_btns.addWidget(creds_toggle)
+        cred_btns.addWidget(autofill_btn)
+        cred_btns.addWidget(save_btn)
+        layout.addLayout(cred_btns)
 
-        main_layout.addLayout(cred_btns)
+        tab.setLayout(layout)
+        return tab
 
-        self.start_btn = QPushButton("🔥 ENGAGE STRATEGY")
-        self.start_btn.setMinimumHeight(30)
-        self.start_btn.clicked.connect(self.start_clicked)
-        main_layout.addWidget(self.start_btn)
+    def _build_export_tab(self):
+        tab = QWidget()
+        layout = QHBoxLayout()
 
-        debug_btn = QPushButton("🛠 Open Debug Console")
-        debug_btn.clicked.connect(lambda: self.debug_console.show())
-        main_layout.addWidget(debug_btn)
+        export_all_btn = QPushButton("📁 Export All")
+        export_csv_btn = QPushButton("📄 Export CSV")
+        export_json_btn = QPushButton("🧾 Export JSON")
 
-        main_layout.addWidget(QLabel("📋 Tactical Log Output:"))
+        export_all_btn.clicked.connect(lambda: self.export_all.emit())
+        export_csv_btn.clicked.connect(lambda: self.export_requested.emit("profits", "csv"))
+        export_json_btn.clicked.connect(lambda: self.export_requested.emit("profits", "json"))
+
+        layout.addWidget(export_all_btn)
+        layout.addWidget(export_csv_btn)
+        layout.addWidget(export_json_btn)
+
+        tab.setLayout(layout)
+        return tab
+
+    def _build_debug_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        open_btn = QPushButton("🛠 Open Debug Console")
+        open_btn.clicked.connect(lambda: self.debug_console.show())
+        layout.addWidget(open_btn)
+        tab.setLayout(layout)
+        return tab
+
+    def _build_log_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("📋 Tactical Log Output:"))
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setMinimumHeight(120)
-        main_layout.addWidget(self.log_view)
-
-        main.setLayout(main_layout)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setWidget(main)
-        return scroll
+        layout.addWidget(self.log_view)
+        tab.setLayout(layout)
+        return tab
 
     def _build_chart_tab(self):
         self.chart_tab = QWidget()
@@ -203,6 +204,29 @@ class SciFiGUI(QWidget):
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._refresh_status_bar)
         self._status_timer.start(5000)
+
+    def _build_status_bar(self):
+        self.status_wallet = QLabel("Wallet: [Not Set]")
+        self.status_network = QLabel("Network: [Unknown]")
+        self.status_balance = QLabel("ETH: ?")
+        self.status_thread = QLabel("Thread: 🔴 Stopped")
+
+        for widget in [self.status_wallet, self.status_network, self.status_balance, self.status_thread]:
+            widget.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+            widget.setStyleSheet("padding: 5px; font-weight: bold;")
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.addWidget(self.status_wallet)
+        layout.addWidget(self.status_network)
+        layout.addWidget(self.status_balance)
+        layout.addWidget(self.status_thread)
+
+        container = QWidget()
+        container.setLayout(layout)
+        return container
 
     def _refresh_status_bar(self):
         addr = self.wallet_input.text().strip()
