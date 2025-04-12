@@ -23,13 +23,13 @@
 
 ## Interface Preview
 
-**Credential Configuration**  
+**Real-Time Profit Chart**  
 ![Wallet Input](IMG_0921.jpeg)
 
-**Live Tactical Logs**  
+**Wallet Credentials**  
 ![Console Log Output](IMG_0922.jpeg)
 
-**Real-Time Profit Chart**  
+**Console Log Output**  
 ![Profit Chart](IMG_0923.jpeg)
 
 ---
