@@ -5,6 +5,7 @@ import time
 import logging
 import sqlite3
 import configparser
+from decimal import Decimal
 from datetime import datetime
 from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -41,6 +42,7 @@ class TradingThread(QThread):
                 gas_price INTEGER,
                 tx_hash TEXT,
                 success INTEGER,
+                trade_size_eth REAL,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -62,12 +64,12 @@ class TradingThread(QThread):
         ''')
         self.conn.commit()
 
-    def _log_trade(self, token, action, delta, gas_price, tx_hash, success):
+    def _log_trade(self, token, action, delta, gas_price, tx_hash, success, trade_size_eth):
         try:
             self.cursor.execute('''
-                INSERT INTO trades (token, action, delta, gas_price, tx_hash, success)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (token, action, delta, gas_price, str(tx_hash), int(success)))
+                INSERT INTO trades (token, action, delta, gas_price, tx_hash, success, trade_size_eth)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (token, action, delta, gas_price, str(tx_hash), int(success), float(trade_size_eth)))
             self.conn.commit()
         except Exception as e:
             self.log_signal.emit(f"[DB ERROR] Failed to log trade: {e}")
@@ -184,9 +186,20 @@ class TradingThread(QThread):
                     self._log_signal(mode, result)
 
                     if mode == "profit" and isinstance(result, list):
-                        for token, action, delta in result:
+                        for opportunity in result:
+                            token = opportunity["token"]
+                            action = opportunity["action"]
+                            delta = Decimal(str(opportunity["delta"]))
                             gas = estimate_gas_price(runtime_options["w3"])
+
                             if manager.strategy.should_trade(gas, delta):
+                                base_amount = Decimal(config.get("TRADING", "amount_eth"))
+                                growth_factor = manager.strategy.growth_factor
+
+                                # Adjust trade size based on delta and growth factor
+                                trade_multiplier = min(max(abs(delta) * float(growth_factor), 0.2), 1.5)
+                                trade_size_eth = base_amount * Decimal(trade_multiplier)
+
                                 try:
                                     tx = execute_swap(
                                         runtime_options["w3"],
@@ -196,9 +209,11 @@ class TradingThread(QThread):
                                         action,
                                         gas,
                                         runtime_options["fee"],
-                                        runtime_options["slippage"]
+                                        runtime_options["slippage"],
+                                        amount_in_eth=trade_size_eth  # Make sure `execute_swap` accepts this
                                     )
-                                    self._log_trade(token, action, delta, gas, tx, success=bool(tx))
+                                    self._log_trade(token, action, float(delta), gas, tx, success=bool(tx), trade_size_eth=trade_size_eth)
+                                    self.log_signal.emit(f"EXECUTED {action.upper()} {token[:6]} | Δ={delta:.4f} | ETH={trade_size_eth:.4f} | TX={tx}")
 
                                     if hasattr(manager.strategy, "estimate_profit"):
                                         try:
@@ -208,7 +223,6 @@ class TradingThread(QThread):
                                             self.log_signal.emit(f"[PROFIT ERROR] {ep}")
                                             logging.exception("[PROFIT ERROR]")
 
-                                    self.log_signal.emit(f"EXECUTED {action.upper()} {token[:6]} → TX {tx}")
                                 except Exception as swap_err:
                                     self.log_signal.emit(f"[SWAP ERROR] {swap_err}")
                                     logging.exception("[SWAP ERROR]")
