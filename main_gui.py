@@ -24,8 +24,10 @@ def load_profit_history(gui):
                 gui.update_chart(val)
         conn.close()
         gui.log("[INIT] Loaded historical profit data into chart.")
+    except sqlite3.DatabaseError as e:
+        gui.log(f"[DB ERROR] Could not load profit history: {e}")
     except Exception as e:
-        gui.log(f"[INIT ERROR] Could not load profit history: {e}")
+        gui.log(f"[INIT ERROR] Unexpected error loading profit history: {e}")
 
 def resolve_infura_url(network, current_url, project_id):
     if current_url and "https" in current_url:
@@ -54,7 +56,8 @@ def main():
                 val = float(msg.split()[-1])
                 if -1000 < val < 1000:
                     window.update_chart(val)
-            except Exception:
+            except ValueError:
+                # Handle any errors with profit parsing
                 window.update_chart(random.uniform(-0.05, 0.05))
 
     def launch_trading(payload):
