@@ -11,7 +11,27 @@ from matplotlib.figure import Figure
 from web3 import Web3
 import configparser
 import os
+import logging
 
+# Configure logging
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+log = logging.getLogger("ProfitMask")
+log.setLevel(logging.DEBUG)
+
+file_handler = logging.FileHandler(os.path.join(LOG_DIR, "activity.log"))
+file_handler.setLevel(logging.DEBUG)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+log.addHandler(file_handler)
+log.addHandler(console_handler)
 
 class SciFiGUI(QWidget):
     start_trading = pyqtSignal(dict)
@@ -199,7 +219,7 @@ class SciFiGUI(QWidget):
         chart_layout.addWidget(self.chart_canvas)
         self.chart_tab.setLayout(chart_layout)
         return self.chart_tab
-        
+
     def _init_status_polling(self):
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._refresh_status_bar)
@@ -254,78 +274,51 @@ class SciFiGUI(QWidget):
         )
 
     def _toggle_creds_visibility(self):
-        self.creds_group.setVisible(not self.creds_group.isVisible())
-
-    def _load_config_to_fields(self):
-        if not os.path.exists("config.ini"):
-            self.log("[ERROR] config.ini not found")
-            return
-        config = configparser.ConfigParser()
-        config.read("config.ini")
-        self.pk_input.setText(config.get("WALLET", "private_key", fallback=""))
-        self.wallet_input.setText(config.get("WALLET", "wallet_address", fallback=""))
-        self.infura_input.setText(config.get("WEB3", "infura_url", fallback=""))
-        self.router_input.setText(config.get("DEX", "router_address", fallback=""))
-        self.oracle_input.setText(config.get("ORACLE", "address", fallback=""))
-        self.network_selector.setCurrentText(config.get("NETWORK", "chain", fallback="mainnet"))
-        self.log("[INFO] Fields loaded from config.ini")
+        self.creds_visible = not self.creds_visible
+        self.pk_input.setVisible(self.creds_visible)
+        self.wallet_input.setVisible(self.creds_visible)
+        self.infura_input.setVisible(self.creds_visible)
+        self.router_input.setVisible(self.creds_visible)
+        self.oracle_input.setVisible(self.creds_visible)
 
     def _save_config_from_fields(self):
         config = configparser.ConfigParser()
-        config.read("config.ini")
-        config["WALLET"] = {
-            "private_key": self.pk_input.text().strip(),
-            "wallet_address": self.wallet_input.text().strip()
-        }
-        config["WEB3"] = {
-            "infura_url": self.infura_input.text().strip()
-        }
-        config["DEX"] = {
-            "router_address": self.router_input.text().strip()
-        }
-        config["ORACLE"] = {
-            "address": self.oracle_input.text().strip()
-        }
-        config["NETWORK"] = {
-            "chain": self.network_selector.currentText()
-        }
-        with open("config.ini", "w") as f:
-            config.write(f)
-        self.log("[INFO] config.ini updated successfully")
+        config.read('config.ini')
 
-    def update_chart(self, value):
-        self.chart_data.append(value)
-        self.cycles.append(len(self.chart_data))
-        self.chart_ax.clear()
-        self.chart_ax.plot(self.cycles, self.chart_data, marker='o', label="Estimated Profit (ETH)")
-        self.chart_ax.set_title("Profit Over Time")
-        self.chart_ax.set_xlabel("Cycle")
-        self.chart_ax.set_ylabel("Profit")
-        self.chart_ax.legend()
-        self.chart_ax.grid(True)
-        self.chart_canvas.draw()
+        config['Wallet'] = {
+            'PrivateKey': self.pk_input.text(),
+            'WalletAddress': self.wallet_input.text(),
+            'InfuraURL': self.infura_input.text(),
+            'RouterAddress': self.router_input.text(),
+            'OracleAddress': self.oracle_input.text(),
+        }
+
+        with open('config.ini', 'w') as configfile:
+            config.write(configfile)
+
+    def _load_config_to_fields(self):
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+
+        self.pk_input.setText(config.get('Wallet', 'PrivateKey'))
+        self.wallet_input.setText(config.get('Wallet', 'WalletAddress'))
+        self.infura_input.setText(config.get('Wallet', 'InfuraURL'))
+        self.router_input.setText(config.get('Wallet', 'RouterAddress'))
+        self.oracle_input.setText(config.get('Wallet', 'OracleAddress'))
 
     def start_clicked(self):
-        self.thread_alive = True
-        payload = {
-            "mode": self.mode_selector.currentText(),
-            "slippage": float(self.slippage_selector.currentText()),
-            "fee": int(self.fee_selector.currentText()),
-            "token_override": self.token_entry.text().strip(),
-            "private_key": self.pk_input.text().strip(),
-            "wallet_address": self.wallet_input.text().strip(),
-            "infura_url": self.infura_input.text().strip(),
-            "router_address": self.router_input.text().strip(),
-            "oracle_address": self.oracle_input.text().strip(),
-            "network": self.network_selector.currentText()
+        config = {
+            'mode': self.mode_selector.currentText(),
+            'slippage': self.slippage_selector.currentText(),
+            'fee': self.fee_selector.currentText(),
+            'network': self.network_selector.currentText(),
+            'token_override': self.token_entry.text(),
         }
-        self.start_trading.emit(payload)
-
-    def log(self, message):
-        formatted = f"[LOG] {message}"
-        self.log_view.append(formatted)
-        self.debug_console.append_message(formatted)
-
-    def closeEvent(self, event):
-        self.thread_alive = False
-        event.accept()
+        self.start_trading.emit(config)
+        
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+    window = SciFiGUI()
+    window.show()
+    sys.exit(app.exec_())
