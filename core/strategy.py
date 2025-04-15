@@ -4,9 +4,14 @@ from decimal import Decimal
 from scipy.stats import zscore
 from web3 import Web3
 import logging
+from typing import List, Tuple, Union, Dict, Any
 
 
 class SignalStrategy:
+    """
+    Strategy based on trend (slope), z-score, and volatility.
+    It evaluates price trends and makes decisions to buy/sell/hold based on thresholds.
+    """
     def __init__(self, config):
         self.token_address = config.get('TRADING', 'token_address')
         self.amount_eth = float(config.get('TRADING', 'amount_eth'))
@@ -15,32 +20,47 @@ class SignalStrategy:
         self.buy_zscore = float(config.get('TRADING', 'buy_zscore_threshold'))
         self.sell_slope = float(config.get('TRADING', 'sell_slope_threshold'))
         self.sell_zscore = float(config.get('TRADING', 'sell_zscore_threshold'))
-        self.price_history = []
+        self.price_history: List[float] = []
 
-    def fetch_latest_price(self):
+    def fetch_latest_price(self) -> float:
+        # Simulated price fetch; replace with real source
         return round(random.uniform(0.4, 1.8), 5)
 
-    def evaluate_market(self):
+    def evaluate_market(self) -> Dict[str, Any]:
+        """
+        Evaluates the current market condition and returns a trading signal.
+        """
         try:
             price = self.fetch_latest_price()
             self.price_history.append(price)
             if len(self.price_history) > self.max_history:
                 self.price_history.pop(0)
 
-            if len(self.price_history) < 6:
+            min_required = min(6, self.max_history)
+            if len(self.price_history) < min_required:
                 return {"action": "hold"}
 
             prices = np.array(self.price_history)
-            slope = np.mean(prices[-3:]) - np.mean(prices[:3])
             price_z = zscore(prices)[-1]
             std_dev = np.std(prices)
 
-            logging.debug(f"[SignalStrategy] price={price}, slope={slope}, zscore={price_z}, std={std_dev}")
+            x = np.arange(len(prices))
+            slope = np.polyfit(x, prices, 1)[0]
+
+            logging.debug(f"[SignalStrategy] price={price:.5f}, slope={slope:.5f}, zscore={price_z:.2f}, std={std_dev:.3f}")
 
             if slope > self.buy_slope and price_z > self.buy_zscore and std_dev < 0.5:
-                return {"action": "buy", "token_address": self.token_address, "amount_eth": self.amount_eth}
+                return {
+                    "action": "buy",
+                    "token_address": self.token_address,
+                    "amount_eth": self.amount_eth
+                }
             elif slope < self.sell_slope and price_z < self.sell_zscore and std_dev > 0.4:
-                return {"action": "sell", "token_address": self.token_address, "amount_eth": self.amount_eth}
+                return {
+                    "action": "sell",
+                    "token_address": self.token_address,
+                    "amount_eth": self.amount_eth
+                }
             else:
                 return {"action": "hold"}
 
@@ -50,7 +70,10 @@ class SignalStrategy:
 
 
 class ProfitStrategy:
-    def __init__(self, w3, router, wallet_address, private_key, oracle):
+    """
+    Arbitrage-style strategy that compares real-time token prices to oracle-based fair values.
+    """
+    def __init__(self, w3, router, wallet_address: str, private_key: str, oracle):
         self.w3 = w3
         self.router = router
         self.wallet_address = wallet_address
@@ -61,33 +84,55 @@ class ProfitStrategy:
             Web3.to_checksum_address("0x6B175474E89094C44Da98b954EedeAC495271d0F"),  # DAI
             Web3.to_checksum_address("0xdAC17F958D2ee523a2206206994597C13D831ec7"),  # USDT
         ]
-        self.growth_factor = Decimal("1.05")
+        self.growth_factor = Decimal("1.05")  # Affects sensitivity and trade size
 
-    def scan_opportunities(self):
+    def scan_opportunities(self) -> List[Dict[str, Union[str, float]]]:
+        """
+        Scans for arbitrage opportunities between real prices and fair value estimates.
+        Adjusts sensitivity and trade size based on growth_factor.
+        """
         opportunities = []
         try:
+            buy_threshold = -0.03 * float(self.growth_factor)
+            sell_threshold = 0.03 * float(self.growth_factor)
+
             for token in self.tokens:
                 price = self.oracle.get_price(token, self.base_token)
                 fair_value = self.oracle.estimate_fair_value(token, self.base_token)
 
                 if fair_value == 0:
-                    logging.warning(f"[ProfitStrategy] Skipping {token[:6]} due to invalid fair value")
+                    logging.warning(f"[ProfitStrategy] Skipping {token[:6]}... due to invalid fair value")
                     continue
 
                 delta = (price - fair_value) / fair_value
-                logging.info(f"[ProfitStrategy] {token[:6]}: price={price}, fair={fair_value}, delta={delta}")
 
-                if delta <= -0.03:
-                    opportunities.append((token, 'buy', delta))
-                elif delta >= 0.03:
-                    opportunities.append((token, 'sell', delta))
+                logging.info(
+                    f"[ProfitStrategy] {token[:6]}...: price={price:.6f}, fair={fair_value:.6f}, "
+                    f"delta={delta:.4f} (buy>{buy_threshold:.4f}, sell<{sell_threshold:.4f})"
+                )
+
+                if delta <= buy_threshold or delta >= sell_threshold:
+                    # Calculate trade size based on delta and growth factor
+                    base_amount_eth = Decimal("0.1")
+                    scaling = abs(Decimal(delta)) * self.growth_factor
+                    trade_size = float(base_amount_eth * scaling)
+
+                    opportunities.append({
+                        "token": token,
+                        "action": "buy" if delta <= buy_threshold else "sell",
+                        "delta": float(delta),
+                        "trade_size_eth": round(trade_size, 6)
+                    })
 
         except Exception as e:
             logging.error(f"[ProfitStrategy] Error during scan: {e}")
 
-        return sorted(opportunities, key=lambda x: abs(x[2]), reverse=True)
+        return sorted(opportunities, key=lambda x: abs(x["delta"]), reverse=True)
 
-    def should_trade(self, gas_cost_eth, profit_eth):
+    def should_trade(self, gas_cost_eth: Decimal, profit_eth: Decimal) -> bool:
+        """
+        Decides whether the trade is worth executing based on gas cost and expected profit.
+        """
         try:
             logging.debug(f"[ProfitStrategy] Gas={gas_cost_eth}, Profit={profit_eth}")
             return profit_eth > gas_cost_eth * Decimal("1.2")
@@ -97,7 +142,10 @@ class ProfitStrategy:
 
 
 class StrategyManager:
-    def __init__(self, config, runtime_options):
+    """
+    Manages which strategy to execute depending on runtime mode (signal or profit).
+    """
+    def __init__(self, config, runtime_options: Dict[str, Any]):
         self.mode = runtime_options.get("mode", "signal")
         self.strategy = None
 
@@ -114,7 +162,10 @@ class StrategyManager:
         else:
             raise ValueError(f"Unsupported strategy mode: {self.mode}")
 
-    def run_cycle(self, *args, **kwargs):
+    def run_cycle(self, *args, **kwargs) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Executes a single evaluation cycle for the selected strategy.
+        """
         try:
             if self.mode == "signal":
                 return self.strategy.evaluate_market()
