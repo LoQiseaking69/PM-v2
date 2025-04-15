@@ -4,7 +4,7 @@ from decimal import Decimal
 from scipy.stats import zscore
 from web3 import Web3
 import logging
-from typing import List, Tuple, Union, Dict, Any
+from typing import List, Dict, Any
 
 
 class SignalStrategy:
@@ -23,7 +23,9 @@ class SignalStrategy:
         self.price_history: List[float] = []
 
     def fetch_latest_price(self) -> float:
-        # Simulated price fetch; replace with real source
+        """
+        Simulated price fetch; replace with real source in production.
+        """
         return round(random.uniform(0.4, 1.8), 5)
 
     def evaluate_market(self) -> Dict[str, Any]:
@@ -68,12 +70,19 @@ class SignalStrategy:
             logging.error(f"[SignalStrategy] Evaluation error: {e}")
             return {"action": "hold"}
 
+    def clear_history(self):
+        """
+        Clears the stored price history for fresh evaluation.
+        """
+        self.price_history.clear()
+        logging.info("[SignalStrategy] Price history cleared")
+
 
 class ProfitStrategy:
     """
     Arbitrage-style strategy that compares real-time token prices to oracle-based fair values.
     """
-    def __init__(self, w3, router, wallet_address: str, private_key: str, oracle):
+    def __init__(self, w3, router, wallet_address: str, private_key: str, oracle, growth_factor=Decimal("1.05")):
         self.w3 = w3
         self.router = router
         self.wallet_address = wallet_address
@@ -84,9 +93,9 @@ class ProfitStrategy:
             Web3.to_checksum_address("0x6B175474E89094C44Da98b954EedeAC495271d0F"),  # DAI
             Web3.to_checksum_address("0xdAC17F958D2ee523a2206206994597C13D831ec7"),  # USDT
         ]
-        self.growth_factor = Decimal("1.05")  # Affects sensitivity and trade size
+        self.growth_factor = growth_factor  # Affects sensitivity and trade size
 
-    def scan_opportunities(self) -> List[Dict[str, Union[str, float]]]:
+    def scan_opportunities(self) -> List[Dict[str, Any]]:
         """
         Scans for arbitrage opportunities between real prices and fair value estimates.
         Adjusts sensitivity and trade size based on growth_factor.
